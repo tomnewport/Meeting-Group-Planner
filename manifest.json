@@ -1,0 +1,19 @@
+{
+  "name": "Workshop Group Planner",
+  "short_name": "Group Planner",
+  "description": "Schedule the fewest rounds of group meetings so everyone meets everyone else",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f5fb",
+  "theme_color": "#6c5ce7",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
