@@ -217,6 +217,53 @@
     /* ── Copy bar ── */
     .copy-bar { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
 
+    /* ── Checkboxes ── */
+    .check-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 1.75rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .check-label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      user-select: none;
+    }
+    .check-label input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── On-break row inside round cards ── */
+    .break-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+      padding-top: 0.65rem;
+      border-top: 1px dashed var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .break-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: var(--bg);
+      border-radius: 20px;
+      padding: 0.15rem 0.55rem;
+      color: var(--text);
+    }
+
     @media (max-width: 520px) {
       header h1 { font-size: 1.5rem; }
       .form-row { flex-direction: column; align-items: stretch; }
@@ -248,6 +295,16 @@
         <label>&nbsp;</label>
         <button class="btn" id="genBtn" onclick="generate()">Generate Schedule</button>
       </div>
+    </div>
+    <div class="check-row">
+      <label class="check-label">
+        <input type="checkbox" id="strictOnce">
+        <span>Each pair meets at most once</span>
+      </label>
+      <label class="check-label">
+        <input type="checkbox" id="allowBreaks">
+        <span>Allow participants to sit out rounds</span>
+      </label>
     </div>
   </div>
 
@@ -309,27 +366,48 @@ function shuffle(arr) {
   return a;
 }
 
-/** Form one round of groups, greedily minimising repeat meetings. */
-function formRound(n, k, met) {
-  // Unmet-partner counts per person (to prioritise constrained people)
+/**
+ * Form one round of groups.
+ * opts.strictOnce  – treat any repeat meeting as near-infinite cost
+ * opts.allowBreaks – allow (n % k) people to sit out so all groups are exactly k
+ * Returns { groups, onBreak } where onBreak is an array of person indices.
+ */
+function formRound(n, k, met, opts = {}) {
+  const { strictOnce = false, allowBreaks = false } = opts;
+
   const unmet = Array.from({length: n}, (_, i) => {
     let c = 0;
     for (let j = 0; j < n; j++) if (j !== i && met[i][j] === 0) c++;
     return c;
   });
 
-  const numGroups = Math.floor(n / k);
-  const numLarge  = n % k; // first numLarge groups get k+1 members
-
-  const assigned = new Set();
-  const groups   = [];
   const order    = shuffle(Array.from({length: n}, (_, i) => i));
+  const assigned = new Set();
+  const onBreak  = [];
+
+  // When breaks are allowed, put the (n % k) least-constrained people on break
+  // so every active group is exactly size k.
+  const remainder = n % k;
+  if (allowBreaks && remainder !== 0) {
+    const byUnmet = [...order].sort((a, b) => unmet[a] - unmet[b] + (Math.random() - 0.5) * 0.4);
+    for (let i = 0; i < remainder; i++) {
+      onBreak.push(byUnmet[i]);
+      assigned.add(byUnmet[i]);
+    }
+  }
+
+  const activeN   = n - assigned.size;
+  const numGroups = Math.floor(activeN / k);
+  // Without breaks, first (n % k) groups get k+1; with breaks all are exactly k.
+  const numLarge  = allowBreaks ? 0 : remainder;
+
+  const groups = [];
 
   for (let g = 0; g < numGroups; g++) {
-    const size  = g < numLarge ? k + 1 : k;
+    const size  = (!allowBreaks && g < numLarge) ? k + 1 : k;
     const group = [];
 
-    // Starter: most-constrained unassigned person (with 40% chance of random pick)
+    // Starter: most-constrained unassigned (40 % chance of random pick for diversity)
     let starter = -1;
     if (Math.random() < 0.4) {
       const avail = order.filter(p => !assigned.has(p));
@@ -342,20 +420,22 @@ function formRound(n, k, met) {
       }
       starter = best;
     }
+    if (starter === -1) break;
 
     group.push(starter);
     assigned.add(starter);
 
-    // Greedily fill: prefer people who least overlap with current group
+    // Greedily fill: minimise overlap with existing group members.
+    // In strictOnce mode, any repeat meeting gets a near-infinite penalty.
     while (group.length < size) {
       let bestP = -1, bestScore = Infinity;
       for (const p of order) {
         if (assigned.has(p)) continue;
         let s = 0;
         for (const gm of group) s += met[gm][p];
-        // Weight: penalise repeats, break ties by unmet count, add noise
-        const score = s * 100 - unmet[p] * 0.5 + Math.random() * 1.5;
-        if (score < bestScore) { bestScore = score; bestP = p; }
+        const penalty = strictOnce ? (s > 0 ? 1e9 : 0) : s * 100;
+        const sc = penalty - unmet[p] * 0.5 + Math.random() * 1.5;
+        if (sc < bestScore) { bestScore = sc; bestP = p; }
       }
       if (bestP === -1) break;
       group.push(bestP);
@@ -365,19 +445,19 @@ function formRound(n, k, met) {
     groups.push(group);
   }
 
-  return groups;
+  return { groups, onBreak };
 }
 
 /** Run one greedy trial until all pairs are covered (or maxRounds). */
-function trial(n, k) {
-  const met      = Array.from({length: n}, () => new Array(n).fill(0));
-  const schedule = [];
-  let   missing  = (n * (n - 1)) / 2;
+function trial(n, k, opts = {}) {
+  const met       = Array.from({length: n}, () => new Array(n).fill(0));
+  const schedule  = [];
+  let   missing   = (n * (n - 1)) / 2;
   const maxRounds = Math.min(n * (n - 1), 200);
 
   while (missing > 0 && schedule.length < maxRounds) {
-    const groups = formRound(n, k, met);
-    schedule.push(groups);
+    const { groups, onBreak } = formRound(n, k, met, opts);
+    schedule.push({ groups, onBreak });
 
     for (const g of groups) {
       for (let i = 0; i < g.length; i++) {
@@ -391,7 +471,6 @@ function trial(n, k) {
     }
   }
 
-  // Tally repeats
   let excess = 0;
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
@@ -400,23 +479,29 @@ function trial(n, k) {
   return { schedule, met, missing, excess };
 }
 
-/** Score a trial (lower = better). */
-function score(t) {
+/**
+ * Score a trial (lower = better).
+ * In strictOnce mode, repeat meetings outweigh extra rounds.
+ */
+function score(t, opts = {}) {
+  if (opts.strictOnce) {
+    return t.missing * 1e9 + t.excess * 1e6 + t.schedule.length * 1e3;
+  }
   return t.schedule.length * 1e6 + t.missing * 1e3 + t.excess;
 }
 
 /** Run multiple restarts and return the best result. */
-function solve(n, k) {
+function solve(n, k, opts = {}) {
   const restarts = Math.min(600, Math.max(80, Math.floor(8000 / (n + k * 2))));
   const theorMin = Math.ceil((n - 1) / (k - 1));
   let best = null, bestScore = Infinity;
 
   for (let i = 0; i < restarts; i++) {
-    const t = trial(n, k);
-    const s = score(t);
+    const t = trial(n, k, opts);
+    const s = score(t, opts);
     if (s < bestScore) { bestScore = s; best = t; }
-    // Early exit: if we've hit perfect coverage at the theoretical minimum
-    if (best && best.missing === 0 && best.schedule.length === theorMin) break;
+    // Early exit on a theoretically-perfect result
+    if (best && best.missing === 0 && best.excess === 0 && best.schedule.length === theorMin) break;
   }
 
   return { ...best, theorMin };
@@ -424,7 +509,7 @@ function solve(n, k) {
 
 // ─── UI ────────────────────────────────────────────────────────────────────
 
-let _names = null, _result = null, _k = null;
+let _names = null, _result = null, _k = null, _opts = {};
 
 function showError(msg) {
   const el = document.getElementById('errorBox');
@@ -440,9 +525,13 @@ function clearError() {
 function generate() {
   clearError();
 
-  const raw = document.getElementById('names').value;
-  const k   = parseInt(document.getElementById('groupSize').value, 10);
+  const raw  = document.getElementById('names').value;
+  const k    = parseInt(document.getElementById('groupSize').value, 10);
   const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  const opts = {
+    strictOnce:  document.getElementById('strictOnce').checked,
+    allowBreaks: document.getElementById('allowBreaks').checked,
+  };
 
   if (names.length < 2) return showError('Enter at least 2 participants.');
   if (isNaN(k) || k < 2) return showError('Group size must be at least 2.');
@@ -455,11 +544,12 @@ function generate() {
   // Defer to allow repaint
   setTimeout(() => {
     try {
-      const result = solve(names.length, k);
+      const result = solve(names.length, k, opts);
       _names  = names;
       _result = result;
       _k      = k;
-      render(names, result, k);
+      _opts   = opts;
+      render(names, result, k, opts);
     } catch (e) {
       showError('Something went wrong: ' + e.message);
     } finally {
@@ -469,16 +559,17 @@ function generate() {
   }, 20);
 }
 
-function render(names, result, k) {
+function render(names, result, k, opts = {}) {
   const { schedule, met, missing, excess, theorMin } = result;
-  const n = names.length;
+  const n          = names.length;
   const totalPairs = (n * (n - 1)) / 2;
   const covered    = totalPairs - missing;
+  const totalBreaks = schedule.reduce((s, r) => s + r.onBreak.length, 0);
 
   // ── Stats ──
-  const perfect = missing === 0 && schedule.length === theorMin;
+  const perfect   = missing === 0 && excess === 0 && schedule.length === theorMin;
   const statsGrid = document.getElementById('statsGrid');
-  statsGrid.innerHTML = `
+  let statsHTML = `
     <div class="stat-box">
       <div class="stat-val ${schedule.length === theorMin ? 'good' : (schedule.length <= theorMin + 1 ? '' : 'warn')}">${schedule.length}</div>
       <div class="stat-lbl">Rounds needed</div>
@@ -492,24 +583,44 @@ function render(names, result, k) {
       <div class="stat-lbl">Pairs met (${covered}/${totalPairs})</div>
     </div>
     <div class="stat-box">
-      <div class="stat-val ${excess === 0 ? 'good' : ''}">${excess}</div>
-      <div class="stat-lbl">Repeated meetings</div>
+      <div class="stat-val ${excess === 0 ? 'good' : 'warn'}">${excess}</div>
+      <div class="stat-lbl">Repeat meetings</div>
     </div>
   `;
+  if (opts.allowBreaks) {
+    statsHTML += `
+    <div class="stat-box">
+      <div class="stat-val">${totalBreaks}</div>
+      <div class="stat-lbl">Total breaks</div>
+    </div>`;
+  }
+  statsGrid.innerHTML = statsHTML;
 
   // ── Alerts ──
   const alerts = document.getElementById('alerts');
-  const msgs = [];
+  const msgs   = [];
+
   if (perfect) {
-    msgs.push(['success', `Perfect schedule — ${schedule.length} rounds, everyone meets everyone exactly once.`]);
+    msgs.push(['success', `Perfect — ${schedule.length} rounds, every pair meets exactly once.`]);
+  } else if (missing === 0 && excess === 0) {
+    msgs.push(['success', `Full coverage with no repeat meetings in ${schedule.length} rounds. (Theoretical minimum: ${theorMin}.)`]);
   } else if (missing === 0) {
-    msgs.push(['info', `Full coverage in ${schedule.length} rounds. The theoretical minimum is ${theorMin}, which may not be achievable for these parameters.`]);
+    msgs.push(['info', `Full coverage in ${schedule.length} rounds. (Theoretical minimum: ${theorMin}.)`]);
   } else {
-    msgs.push(['warn', `${missing} pair${missing !== 1 ? 's' : ''} won't meet in this schedule. This can happen when the group size doesn't divide evenly into all pairs. Try clicking Generate again for a different attempt.`]);
+    msgs.push(['warn', `${missing} pair${missing !== 1 ? 's' : ''} won't meet in this schedule. Try clicking Generate again for a different attempt.`]);
   }
-  if (excess > 0) {
-    msgs.push(['info', `${excess} meeting slot${excess !== 1 ? 's' : ''} involve pairs who've already met. Some repetition is unavoidable with these parameters.`]);
+
+  if (opts.strictOnce && excess > 0) {
+    msgs.push(['warn', `${excess} repeat meeting${excess !== 1 ? 's' : ''} could not be avoided. With ${n} people in groups of ${k}, perfect one-time coverage may be mathematically impossible.`]);
+  } else if (!opts.strictOnce && excess > 0) {
+    msgs.push(['info', `${excess} meeting slot${excess !== 1 ? 's' : ''} involve pairs who've already met. Enable "each pair meets at most once" to try harder to avoid this.`]);
   }
+
+  if (opts.allowBreaks && totalBreaks > 0) {
+    const breaksPerRound = (totalBreaks / schedule.length).toFixed(1);
+    msgs.push(['info', `Participants sit out an average of ${breaksPerRound} slot${breaksPerRound !== '1.0' ? 's' : ''} per round to keep groups equal-sized.`]);
+  }
+
   alerts.innerHTML = msgs.map(([type, txt]) => `<div class="alert alert-${type}">${txt}</div>`).join('');
 
   // ── Legend ──
@@ -521,7 +632,7 @@ function render(names, result, k) {
   const roundsEl = document.getElementById('rounds');
   roundsEl.innerHTML = '';
 
-  schedule.forEach((groups, ri) => {
+  schedule.forEach(({ groups, onBreak }, ri) => {
     const card  = document.createElement('div');
     card.className = 'round-card';
 
@@ -530,7 +641,7 @@ function render(names, result, k) {
         <div class="round-badge">${ri + 1}</div>
         <div class="round-title">Round ${ri + 1}</div>
       </div>
-      <div class="groups-row" id="r${ri}-groups"></div>
+      <div class="groups-row"></div>
     `;
 
     const groupsRow = card.querySelector('.groups-row');
@@ -555,6 +666,16 @@ function render(names, result, k) {
       box.appendChild(rows);
       groupsRow.appendChild(box);
     });
+
+    if (onBreak && onBreak.length > 0) {
+      const breakRow = document.createElement('div');
+      breakRow.className = 'break-row';
+      breakRow.innerHTML = '<span style="font-weight:600;margin-right:0.15rem">On break:</span>' +
+        onBreak.map(pi =>
+          `<span class="break-chip"><span class="dot" style="background:${PALETTE[pi % PALETTE.length]}"></span>${names[pi]}</span>`
+        ).join('');
+      card.appendChild(breakRow);
+    }
 
     roundsEl.appendChild(card);
   });
@@ -587,11 +708,14 @@ function render(names, result, k) {
 function copyText() {
   if (!_result || !_names) return;
   const lines = ['Workshop Schedule', '='.repeat(38), ''];
-  _result.schedule.forEach((groups, ri) => {
+  _result.schedule.forEach(({ groups, onBreak }, ri) => {
     lines.push(`Round ${ri + 1}:`);
     groups.forEach((group, gi) => {
       lines.push(`  Group ${String.fromCharCode(65 + gi)}: ${group.map(i => _names[i]).join(', ')}`);
     });
+    if (onBreak && onBreak.length > 0) {
+      lines.push(`  On break: ${onBreak.map(i => _names[i]).join(', ')}`);
+    }
     lines.push('');
   });
 

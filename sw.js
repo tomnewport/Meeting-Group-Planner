@@ -1,4 +1,4 @@
-const CACHE = 'group-planner-v1';
+const CACHE = 'group-planner-v2';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon.svg', './sw.js'];
 
 self.addEventListener('install', event => {
