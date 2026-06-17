@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workshop Group Planner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #6c5ce7;
+      --accent-dark: #5a4fd1;
+      --bg: #f4f5fb;
+      --card: #ffffff;
+      --text: #2d3436;
+      --muted: #636e72;
+      --border: #dfe3ee;
+      --success-bg: #d4f7e7; --success-border: #27ae60; --success-text: #1a7a45;
+      --warn-bg: #fff3cd;   --warn-border: #f39c12;   --warn-text: #7d5300;
+      --info-bg:  #d6eaf8;  --info-border:  #2980b9;  --info-text:  #154e7a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 4rem;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1rem; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 2rem; }
+    header h1 { font-size: 1.9rem; font-weight: 700; color: var(--text); }
+    header h1 span { color: var(--accent); }
+    header p { color: var(--muted); margin-top: 0.4rem; font-size: 0.95rem; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1.1rem; color: var(--text); }
+
+    /* ── Form ── */
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    label { font-size: 0.82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+    textarea, input[type="number"] {
+      padding: 0.7rem 0.85rem;
+      border: 2px solid var(--border);
+      border-radius: 9px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fafbff;
+      transition: border-color .18s;
+      width: 100%;
+    }
+    textarea { min-height: 190px; resize: vertical; font-family: 'Menlo', 'Courier New', monospace; }
+    textarea:focus, input[type="number"]:focus { outline: none; border-color: var(--accent); background: #fff; }
+
+    input[type="number"] { max-width: 110px; }
+
+    .form-row { display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem; flex-wrap: wrap; }
+
+    .btn {
+      padding: 0.72rem 1.4rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .18s, transform .1s, opacity .18s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--accent-dark); }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+    }
+    .btn-ghost:hover { background: #f0edff; }
+
+    .hidden { display: none !important; }
+
+    /* ── Alert ── */
+    .alert {
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      border-left: 4px solid;
+      margin-bottom: 0.75rem;
+    }
+    .alert-success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+    .alert-warn    { background: var(--warn-bg);    border-color: var(--warn-border);   color: var(--warn-text); }
+    .alert-info    { background: var(--info-bg);    border-color: var(--info-border);   color: var(--info-text); }
+
+    /* ── Stats ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .stat-box { background: var(--bg); border-radius: 10px; padding: 1rem; text-align: center; }
+    .stat-val { font-size: 2rem; font-weight: 700; color: var(--accent); line-height: 1; }
+    .stat-val.good { color: #27ae60; }
+    .stat-val.warn { color: #e67e22; }
+    .stat-lbl { font-size: 0.72rem; color: var(--muted); margin-top: 0.3rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* ── Round cards ── */
+    .rounds { display: flex; flex-direction: column; gap: 1rem; }
+
+    .round-card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+
+    .round-head {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .round-badge {
+      background: var(--accent);
+      color: #fff;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .round-title { font-weight: 600; font-size: 0.95rem; }
+
+    .groups-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+    .group-box {
+      background: #f8f7ff;
+      border: 1.5px solid #e2deff;
+      border-radius: 11px;
+      padding: 0.75rem 1rem;
+      min-width: 130px;
+    }
+
+    .group-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .name-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.88rem;
+      color: var(--text);
+      padding: 0.15rem 0;
+    }
+
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      background: var(--bg);
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+    }
+
+    /* ── Coverage matrix ── */
+    details { margin-top: 1rem; }
+    summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); user-select: none; }
+    summary:hover { color: var(--accent-dark); }
+
+    .matrix-wrap { overflow-x: auto; margin-top: 1rem; }
+    table { border-collapse: collapse; font-size: 0.75rem; }
+    th, td { padding: 0.3rem 0.5rem; text-align: center; border: 1px solid var(--border); }
+    th { background: var(--bg); font-weight: 600; color: var(--muted); }
+    td.met-0 { background: #ffeaea; color: #c0392b; font-weight: 600; }
+    td.met-1 { background: #d4f7e7; color: #1a7a45; font-weight: 600; }
+    td.met-2 { background: #ffeaa7; color: #7d5300; font-weight: 600; }
+    td.met-3 { background: #fab1a0; color: #922b21; font-weight: 600; }
+    td.met-self { background: var(--bg); color: var(--border); }
+
+    /* ── Copy bar ── */
+    .copy-bar { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+
+    @media (max-width: 520px) {
+      header h1 { font-size: 1.5rem; }
+      .form-row { flex-direction: column; align-items: stretch; }
+      input[type="number"] { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Workshop <span>Group</span> Planner</h1>
+    <p>Find the fewest rounds of group meetings so everyone gets to work with everyone else</p>
+  </header>
+
+  <!-- Setup card -->
+  <div class="card">
+    <h2>Participants &amp; Settings</h2>
+    <div class="form-group">
+      <label for="names">Names — one per line</label>
+      <textarea id="names" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana&#10;Eve&#10;Frank&#10;Grace&#10;Henry&#10;Isla&#10;Jack&#10;Karen&#10;Leo"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="groupSize">Group size</label>
+        <input type="number" id="groupSize" min="2" max="20" value="3">
+      </div>
+      <div class="form-group" style="flex:0">
+        <label>&nbsp;</label>
+        <button class="btn" id="genBtn" onclick="generate()">Generate Schedule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="errorBox" class="hidden"></div>
+
+  <!-- Results -->
+  <div id="results" class="hidden">
+
+    <!-- Stats + alerts -->
+    <div class="card" id="statsCard">
+      <h2>Summary</h2>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div id="alerts"></div>
+      <details>
+        <summary>Show participant colours</summary>
+        <div class="legend" id="legend"></div>
+      </details>
+    </div>
+
+    <!-- Schedule -->
+    <div class="rounds" id="rounds"></div>
+
+    <!-- Matrix -->
+    <div class="card">
+      <details>
+        <summary>Show meeting frequency matrix</summary>
+        <div class="matrix-wrap" id="matrixWrap"></div>
+      </details>
+    </div>
+
+    <!-- Copy -->
+    <div class="copy-bar">
+      <button class="btn btn-ghost" onclick="copyText()">Copy schedule as text</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── Palette ───────────────────────────────────────────────────────────────
+
+const PALETTE = [
+  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+  '#3498db','#9b59b6','#e91e63','#ff5722','#795548',
+  '#00bcd4','#8bc34a','#ff9800','#673ab7','#607d8b',
+  '#c0392b','#27ae60','#2980b9','#d35400','#16a085',
+  '#8e44ad','#f39c12','#2c3e50','#7f8c8d','#229954',
+];
+
+// ─── Algorithm ─────────────────────────────────────────────────────────────
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Form one round of groups, greedily minimising repeat meetings. */
+function formRound(n, k, met) {
+  // Unmet-partner counts per person (to prioritise constrained people)
+  const unmet = Array.from({length: n}, (_, i) => {
+    let c = 0;
+    for (let j = 0; j < n; j++) if (j !== i && met[i][j] === 0) c++;
+    return c;
+  });
+
+  const numGroups = Math.floor(n / k);
+  const numLarge  = n % k; // first numLarge groups get k+1 members
+
+  const assigned = new Set();
+  const groups   = [];
+  const order    = shuffle(Array.from({length: n}, (_, i) => i));
+
+  for (let g = 0; g < numGroups; g++) {
+    const size  = g < numLarge ? k + 1 : k;
+    const group = [];
+
+    // Starter: most-constrained unassigned person (with 40% chance of random pick)
+    let starter = -1;
+    if (Math.random() < 0.4) {
+      const avail = order.filter(p => !assigned.has(p));
+      starter = avail[Math.floor(Math.random() * avail.length)] ?? -1;
+    }
+    if (starter === -1) {
+      let best = -1;
+      for (const p of order) {
+        if (!assigned.has(p) && (best === -1 || unmet[p] > unmet[best])) best = p;
+      }
+      starter = best;
+    }
+
+    group.push(starter);
+    assigned.add(starter);
+
+    // Greedily fill: prefer people who least overlap with current group
+    while (group.length < size) {
+      let bestP = -1, bestScore = Infinity;
+      for (const p of order) {
+        if (assigned.has(p)) continue;
+        let s = 0;
+        for (const gm of group) s += met[gm][p];
+        // Weight: penalise repeats, break ties by unmet count, add noise
+        const score = s * 100 - unmet[p] * 0.5 + Math.random() * 1.5;
+        if (score < bestScore) { bestScore = score; bestP = p; }
+      }
+      if (bestP === -1) break;
+      group.push(bestP);
+      assigned.add(bestP);
+    }
+
+    groups.push(group);
+  }
+
+  return groups;
+}
+
+/** Run one greedy trial until all pairs are covered (or maxRounds). */
+function trial(n, k) {
+  const met      = Array.from({length: n}, () => new Array(n).fill(0));
+  const schedule = [];
+  let   missing  = (n * (n - 1)) / 2;
+  const maxRounds = Math.min(n * (n - 1), 200);
+
+  while (missing > 0 && schedule.length < maxRounds) {
+    const groups = formRound(n, k, met);
+    schedule.push(groups);
+
+    for (const g of groups) {
+      for (let i = 0; i < g.length; i++) {
+        for (let j = i + 1; j < g.length; j++) {
+          const [a, b] = [g[i], g[j]];
+          if (met[a][b] === 0) missing--;
+          met[a][b]++;
+          met[b][a]++;
+        }
+      }
+    }
+  }
+
+  // Tally repeats
+  let excess = 0;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      if (met[i][j] > 1) excess += met[i][j] - 1;
+
+  return { schedule, met, missing, excess };
+}
+
+/** Score a trial (lower = better). */
+function score(t) {
+  return t.schedule.length * 1e6 + t.missing * 1e3 + t.excess;
+}
+
+/** Run multiple restarts and return the best result. */
+function solve(n, k) {
+  const restarts = Math.min(600, Math.max(80, Math.floor(8000 / (n + k * 2))));
+  const theorMin = Math.ceil((n - 1) / (k - 1));
+  let best = null, bestScore = Infinity;
+
+  for (let i = 0; i < restarts; i++) {
+    const t = trial(n, k);
+    const s = score(t);
+    if (s < bestScore) { bestScore = s; best = t; }
+    // Early exit: if we've hit perfect coverage at the theoretical minimum
+    if (best && best.missing === 0 && best.schedule.length === theorMin) break;
+  }
+
+  return { ...best, theorMin };
+}
+
+// ─── UI ────────────────────────────────────────────────────────────────────
+
+let _names = null, _result = null, _k = null;
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.className = 'alert alert-warn';
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function clearError() {
+  document.getElementById('errorBox').classList.add('hidden');
+}
+
+function generate() {
+  clearError();
+
+  const raw = document.getElementById('names').value;
+  const k   = parseInt(document.getElementById('groupSize').value, 10);
+  const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (names.length < 2) return showError('Enter at least 2 participants.');
+  if (isNaN(k) || k < 2) return showError('Group size must be at least 2.');
+  if (k >= names.length) return showError(`Group size (${k}) must be smaller than the number of participants (${names.length}).`);
+
+  const btn = document.getElementById('genBtn');
+  btn.textContent = 'Computing…';
+  btn.disabled = true;
+
+  // Defer to allow repaint
+  setTimeout(() => {
+    try {
+      const result = solve(names.length, k);
+      _names  = names;
+      _result = result;
+      _k      = k;
+      render(names, result, k);
+    } catch (e) {
+      showError('Something went wrong: ' + e.message);
+    } finally {
+      btn.textContent = 'Generate Schedule';
+      btn.disabled = false;
+    }
+  }, 20);
+}
+
+function render(names, result, k) {
+  const { schedule, met, missing, excess, theorMin } = result;
+  const n = names.length;
+  const totalPairs = (n * (n - 1)) / 2;
+  const covered    = totalPairs - missing;
+
+  // ── Stats ──
+  const perfect = missing === 0 && schedule.length === theorMin;
+  const statsGrid = document.getElementById('statsGrid');
+  statsGrid.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-val ${schedule.length === theorMin ? 'good' : (schedule.length <= theorMin + 1 ? '' : 'warn')}">${schedule.length}</div>
+      <div class="stat-lbl">Rounds needed</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">${theorMin}</div>
+      <div class="stat-lbl">Theoretical min</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val ${covered === totalPairs ? 'good' : 'warn'}">${Math.round(covered / totalPairs * 100)}%</div>
+      <div class="stat-lbl">Pairs met (${covered}/${totalPairs})</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val ${excess === 0 ? 'good' : ''}">${excess}</div>
+      <div class="stat-lbl">Repeated meetings</div>
+    </div>
+  `;
+
+  // ── Alerts ──
+  const alerts = document.getElementById('alerts');
+  const msgs = [];
+  if (perfect) {
+    msgs.push(['success', `Perfect schedule — ${schedule.length} rounds, everyone meets everyone exactly once.`]);
+  } else if (missing === 0) {
+    msgs.push(['info', `Full coverage in ${schedule.length} rounds. The theoretical minimum is ${theorMin}, which may not be achievable for these parameters.`]);
+  } else {
+    msgs.push(['warn', `${missing} pair${missing !== 1 ? 's' : ''} won't meet in this schedule. This can happen when the group size doesn't divide evenly into all pairs. Try clicking Generate again for a different attempt.`]);
+  }
+  if (excess > 0) {
+    msgs.push(['info', `${excess} meeting slot${excess !== 1 ? 's' : ''} involve pairs who've already met. Some repetition is unavoidable with these parameters.`]);
+  }
+  alerts.innerHTML = msgs.map(([type, txt]) => `<div class="alert alert-${type}">${txt}</div>`).join('');
+
+  // ── Legend ──
+  document.getElementById('legend').innerHTML = names
+    .map((name, i) => `<span class="legend-item"><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span>${name}</span>`)
+    .join('');
+
+  // ── Rounds ──
+  const roundsEl = document.getElementById('rounds');
+  roundsEl.innerHTML = '';
+
+  schedule.forEach((groups, ri) => {
+    const card  = document.createElement('div');
+    card.className = 'round-card';
+
+    card.innerHTML = `
+      <div class="round-head">
+        <div class="round-badge">${ri + 1}</div>
+        <div class="round-title">Round ${ri + 1}</div>
+      </div>
+      <div class="groups-row" id="r${ri}-groups"></div>
+    `;
+
+    const groupsRow = card.querySelector('.groups-row');
+
+    groups.forEach((group, gi) => {
+      const box   = document.createElement('div');
+      box.className = 'group-box';
+
+      const label = document.createElement('div');
+      label.className = 'group-label';
+      label.textContent = `Group ${String.fromCharCode(65 + gi)}`;
+
+      const rows = document.createElement('div');
+      group.forEach(pi => {
+        const row = document.createElement('div');
+        row.className = 'name-row';
+        row.innerHTML = `<span class="dot" style="background:${PALETTE[pi % PALETTE.length]}"></span><span>${names[pi]}</span>`;
+        rows.appendChild(row);
+      });
+
+      box.appendChild(label);
+      box.appendChild(rows);
+      groupsRow.appendChild(box);
+    });
+
+    roundsEl.appendChild(card);
+  });
+
+  // ── Matrix ──
+  const header = ['', ...names].map((n, i) => i === 0 ? `<th></th>` : `<th title="${n}">${n.length > 6 ? n.slice(0, 5) + '…' : n}</th>`).join('');
+  const rows = names.map((name, i) => {
+    const cells = names.map((_, j) => {
+      if (i === j) return `<td class="met-self">—</td>`;
+      const v = met[i][j];
+      const cls = v === 0 ? 'met-0' : v === 1 ? 'met-1' : v === 2 ? 'met-2' : 'met-3';
+      return `<td class="${cls}" title="${name} ↔ ${names[j]}: ${v} meeting${v !== 1 ? 's' : ''}">${v}</td>`;
+    }).join('');
+    return `<tr><th>${name.length > 6 ? name.slice(0, 5) + '…' : name}</th>${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('matrixWrap').innerHTML = `
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem">
+      <span style="background:#d4f7e7;padding:0 4px;border-radius:3px">1</span> = met once &nbsp;
+      <span style="background:#ffeaa7;padding:0 4px;border-radius:3px">2</span> = met twice &nbsp;
+      <span style="background:#ffeaea;padding:0 4px;border-radius:3px">0</span> = never met
+    </p>
+    <table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>
+  `;
+
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyText() {
+  if (!_result || !_names) return;
+  const lines = ['Workshop Schedule', '='.repeat(38), ''];
+  _result.schedule.forEach((groups, ri) => {
+    lines.push(`Round ${ri + 1}:`);
+    groups.forEach((group, gi) => {
+      lines.push(`  Group ${String.fromCharCode(65 + gi)}: ${group.map(i => _names[i]).join(', ')}`);
+    });
+    lines.push('');
+  });
+
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const btn = event.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+// Allow Enter in the group-size field to trigger generate
+document.getElementById('groupSize').addEventListener('keydown', e => {
+  if (e.key === 'Enter') generate();
+});
+</script>
+</body>
+</html>
